@@ -1,0 +1,22 @@
+spec-version: 0.36.0
+
+default-extensions:
+        - GeneralizedNewtypeDeriving
+        - MultiParamTypeClasses
+        - ImportQualifiedPost
+        - OverloadedStrings
+        - FlexibleContexts
+        - TemplateHaskell
+        - NamedFieldPuns
+        - TypeOperators
+        - DeriveGeneric
+        - LambdaCase
+        - RankNTypes
+        - Arrows
+
+dependencies:
+        - megaparsec
+        - base
+
+library:
+        source-dirs: src
