@@ -6,17 +6,27 @@ default-extensions:
         - ImportQualifiedPost
         - OverloadedStrings
         - FlexibleContexts
+        - TypeApplications
+        - ConstraintKinds
         - TemplateHaskell
         - NamedFieldPuns
         - TypeOperators
         - DeriveGeneric
         - LambdaCase
         - RankNTypes
+        - DataKinds
         - Arrows
+        - GADTs
 
 dependencies:
         - megaparsec
+        - containers
+        - scientific
+        - effectful
+        - some
         - base
+        - lens
+        - mtl
 
 library:
         source-dirs: src

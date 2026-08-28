@@ -70,5 +70,5 @@ at least one field.
 *** Unit
 #+begin_src
   type point
-    = Point int int
+  
 #+end_src

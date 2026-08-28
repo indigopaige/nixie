@@ -1,0 +1,44 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.38.3.
+--
+-- see: https://github.com/sol/hpack
+
+name:           nixie
+version:        0.0.0
+build-type:     Simple
+
+library
+  exposed-modules:
+      Text.Nixie
+      Text.Nixie.Ast
+      Text.Nixie.Interpreter
+  hs-source-dirs:
+      src
+  default-extensions:
+      GeneralizedNewtypeDeriving
+      MultiParamTypeClasses
+      ImportQualifiedPost
+      OverloadedStrings
+      FlexibleContexts
+      TypeApplications
+      ConstraintKinds
+      TemplateHaskell
+      NamedFieldPuns
+      TypeOperators
+      DeriveGeneric
+      LambdaCase
+      RankNTypes
+      DataKinds
+      Arrows
+      GADTs
+  build-depends:
+      base
+    , containers
+    , effectful
+    , lens
+    , megaparsec
+    , mtl
+    , scientific
+    , some
+  default-language: Haskell2010
