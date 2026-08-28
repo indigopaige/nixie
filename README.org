@@ -58,8 +58,7 @@ Patterns in nixie are used to bind values to variables and destructure native st
   both@(x, y)
 #+end_src
 ** Type
-Nixie types are simply records or unit types that have
-at least one field.
+Nixie types are simply records or unit types.
 
 *** Record
 #+begin_src
@@ -69,6 +68,6 @@ at least one field.
 
 *** Unit
 #+begin_src
-  type point
+  type point = Point int int
   
 #+end_src
