@@ -7,7 +7,9 @@ import Data.Foldable
 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import Data.Map (Map)
 import Data.Bifunctor
+import Control.Monad
 import GHC.Stack
 
 import Effectful.Writer.Static.Local
@@ -19,7 +21,7 @@ import Effectful
 import qualified Text.Megaparsec as P
 import Data.Void
 
-import Control.Lens ((&))
+import Control.Lens ((&), (^.))
 
 type Constraints = [Constraint]
 data Constraint  = Constraint Ty Ty
@@ -29,7 +31,8 @@ data Scheme      = Forall (Set.Set TyVar) Ty
 type Count       = Int
 
 type Infer es =
-  ( Writer Constraints :> es
+  ( Reader (Map Ident Expr) :> es
+  , Writer Constraints :> es
   , Reader Context :> es
   , Error String :> es
   , State Count :> es
@@ -84,17 +87,41 @@ instantiate (Forall vs t) = do
   let subst = Map.fromList (zip vars ftvs)
   pure $ apply subst t
 
+checkFnDef :: Infer es => FnDef -> Eff es ()
+checkFnDef fn = do
+  act <- infer $ fn^.fnDefFun.fnFunExpr
+
+  case fn^.fnDefSig of
+    Nothing -> pure ()
+    Just x  -> constrain act (x^.fnSigTy)
 
 infer :: Infer es => Expr -> Eff es Ty
 infer = \case
-  ExprUnb (Ident x) -> f x
+  ExprUnb (i@(Ident x)) -> f
     where
-      noper   = TyWrd :-> TyWrd :-> TyWrd
-      f "add" = pure noper
-      f "sub" = pure noper
-      f "mul" = pure noper
-      f "div" = pure noper
-      f x     = throwError $ "unbound variable " <> x
+      f = g x
+        where
+          g "equal"   = do
+            a <- fresh
+            pure $ a :-> a :-> TyBin
+
+          g "add_wrd" = pure $ TyWrd :-> TyWrd :-> TyWrd
+          g "sub_wrd" = pure $ TyWrd :-> TyWrd :-> TyWrd
+          g "mul_wrd" = pure $ TyWrd :-> TyWrd :-> TyWrd
+          g "div_wrd" = pure $ TyWrd :-> TyWrd :-> TyWrd
+          g "add_int" = pure $ TyInt :-> TyInt :-> TyInt
+          g "sub_int" = pure $ TyInt :-> TyInt :-> TyInt
+          g "mul_int" = pure $ TyInt :-> TyInt :-> TyInt
+          g "div_int" = pure $ TyInt :-> TyInt :-> TyInt
+          g "add_dec" = pure $ TyDec :-> TyDec :-> TyDec
+          g "sub_dec" = pure $ TyDec :-> TyDec :-> TyDec
+          g "mul_dec" = pure $ TyDec :-> TyDec :-> TyDec
+          g "div_dec" = pure $ TyDec :-> TyDec :-> TyDec
+          g x         = do
+            m <- ask @(Map Ident Expr)
+            case Map.lookup i m of
+              Just x  -> infer x
+              Nothing -> throwError $ "unbound variable " <> x
 
   ExprInt _         -> pure TyInt
   ExprDec _         -> pure TyDec
@@ -180,27 +207,43 @@ solve s ((Constraint t t') : cs) = do
 runSolve :: [Constraint] -> Either (CallStack, String) Subst
 runSolve = (runPureEff . runError) . solve Map.empty
 
-runInfer :: Expr -> Either (CallStack, String) (Ty, Constraints)
-runInfer expr = infer expr & runPureEff
+runInferFn :: Map Ident Expr -> FnDef -> Either (CallStack, String) (Ty, Constraints)
+runInferFn env fn = m & runPureEff
                 . runError @String
                 . evalState @Count 0
                 . runReader @Context []
                 . runWriter @Constraints
+                . runReader @(Map Ident Expr) env
+  where
+    m = do
+      ty <- infer $ fn^.fnDefFun.fnFunExpr
+      case fn^.fnDefSig of
+        Just s | s^.fnSigName == fn^.fnDefFun.fnFunName -> constrain ty (s^.fnSigTy)
+        _                                               -> pure ()
+      pure ty
 
-inferTy :: Error String :> es => Expr -> Eff es Ty
-inferTy expr = f $ do
-  (t, cs) <- runInfer expr
+runInfer :: Map Ident Expr -> Expr -> Either (CallStack, String) (Ty, Constraints)
+runInfer env expr = infer expr & runPureEff
+                . runError @String
+                . evalState @Count 0
+                . runReader @Context []
+                . runWriter @Constraints
+                . runReader @(Map Ident Expr) env
+
+inferExprTy :: Error String :> es => Map Ident Expr -> Expr -> Eff es Ty
+inferExprTy env expr = f $ do
+  (t, cs) <- runInfer env expr
   s       <- runSolve cs
   pure $ apply s t
   where
-    f (Left (cs, e)) = throwError_ e
-    f (Right x)      = pure x
+    f (Left (_, e)) = throwError_ e
+    f (Right x)     = pure x
 
-check :: String -> IO (Either String (Expr, Ty))
-check e = do
-  res <- parseFile expr e
-  case res of
-    Left x  -> pure $ Left (show x)
-    Right x -> case inferTy x & runPureEff . runError of
-                 Left (_, x) -> pure $ Left x
-                 Right x'    -> pure $ Right (x, x')
+inferFnTy :: Error String :> es => Map Ident Expr -> FnDef -> Eff es Ty
+inferFnTy env fn = f $ do
+  (t, cs) <- runInferFn env fn
+  s       <- runSolve cs
+  pure $ apply s t
+  where
+    f (Left (_, e)) = throwError_ e
+    f (Right x)      = pure x

@@ -36,11 +36,11 @@ expression = msum [ con
                   , lht
                   , try lam
                   , try app
-                  , parens expression
                   , tup
                   , lst
                   , var
                   , lit
+                  , parens expression
                   ]
   where
     lam = ExpressionLam <$> patterns <* sym "." <*> expression
@@ -118,7 +118,7 @@ ident = do
   then empty
   else pure i
   where
-    f = letterChar >> many alphaNumChar
+    f = letterChar >> many (alphaNumChar <|> char '_')
     g = char '_' >> some alphaNumChar
     h = match $ msum [f, g]
 

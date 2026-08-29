@@ -1,8 +1,8 @@
 module Compile.Nixie.IR where
 
 import qualified Text.Megaparsec.Char as C
+import Control.Lens ((&), makeLenses, (^.))
 import qualified Text.Megaparsec as P
-import Control.Lens ((&), makeLenses)
 import Effectful.Reader.Static
 import Control.Applicative
 import Data.Scientific
@@ -116,19 +116,42 @@ data TyDef = TyDef
 fromTyp :: Typ -> TyDef
 fromTyp (Typ n c) = TyDef n (map fromConstructor c)
 
-data FnDef= FnDef
-  { _fnName :: Ident
-  , _fnExpr :: Expr
+data FnSig = FnSig
+  { _fnSigName :: Ident
+  , _fnSigTy   :: Ty
   }
   deriving ( Show
            , Ord
            , Eq
            )
 
-fromFunction :: Function -> FnDef
-fromFunction (Function n e) = FnDef n (fromExpression e)
+data FnFun = FnFun
+  { _fnFunName :: Ident
+  , _fnFunExpr :: Expr
+  }
+  deriving ( Show
+           , Ord
+           , Eq
+           )
+
+data FnDef = FnDef
+  { _fnDefSig :: Maybe FnSig
+  , _fnDefFun :: FnFun
+  }
+  deriving ( Show
+           , Ord
+           , Eq
+           )
+
+fromFunction :: Definition -> FnDef
+fromFunction (Definition s f) = FnDef sf ff
+  where
+    sf = (\s -> FnSig (signatureName s) $ fromTypeName (signatureTypeName s)) <$> s
+    ff = FnFun (functionNam f) $ fromExpression (functionExp f)
 
 makeLenses ''FnDef
+makeLenses ''FnSig
+makeLenses ''FnFun
 makeLenses ''TyDef
 
 data Item
@@ -143,13 +166,21 @@ expr :: Nixie Expr
 expr = fromExpression <$> expression
 
 item :: Nixie Item
-item = fmap g function <|> fmap f typ
+
+item = fmap g definition <|> fmap f typ
   where
     g = ItemFnDef . fromFunction
     f = ItemTyDef . fromTyp
 
-prog :: Nixie [Item]
-prog = many (item <* C.space)
+prog :: Nixie (Maybe ([Item], Item))
+prog = splitMain <$> many (item <* C.space)
+  where
+    splitMain items       = case partition isMain items of
+      ([m], rest) -> Just (rest, m)
+      _           -> Nothing
+
+    isMain (ItemFnDef fd) = fd^.fnDefFun.fnFunName == Ident "main"
+    isMain _              = False
 
 -- Expr functions for working with debruijn indicies
 shift :: Int -> Int -> Expr -> Expr
@@ -168,3 +199,4 @@ shift d c (ExprCnd x y z) = ExprCnd
                             (shift d c z)
 
 shift d c x               = x
+
