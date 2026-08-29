@@ -22,10 +22,10 @@ data Expr
   | ExprTup [Expr]
   | ExprUnb Ident
   | ExprWrd Word
-  | ExprVar Word
   | ExprBin Bool
   | ExprChr Char
   | ExprAbs Expr
+  | ExprVar Int
   | ExprInt Int
   deriving ( Show
            , Ord
@@ -152,15 +152,13 @@ prog :: Nixie [Item]
 prog = many (item <* C.space)
 
 -- Expr functions for working with debruijn indicies
-shift :: Word -> Word -> Expr -> Expr
+shift :: Int -> Int -> Expr -> Expr
 shift d c (ExprVar x)
   | x >= c                = ExprVar (x + d)
   | otherwise             = ExprVar x
 
 shift d c (ExprAbs x)     = ExprAbs $ shift d (c + 1) x
-shift d c (ExprLet x y)   = ExprLet (s x) (s y)
-  where
-    s = shift d (c + 1)
+shift d c (ExprLet x y)   = ExprLet (shift d c x) (shift d (c + 1) y)
 
 shift d c (ExprApp x y)   = ExprApp (shift d c x) (shift d c y)
 

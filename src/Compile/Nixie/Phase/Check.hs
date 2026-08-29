@@ -187,19 +187,20 @@ runInfer expr = infer expr & runPureEff
                 . runReader @Context []
                 . runWriter @Constraints
 
-inferTy :: Expr -> Either (CallStack, String) Ty
-inferTy expr = do
+inferTy :: Error String :> es => Expr -> Eff es Ty
+inferTy expr = f $ do
   (t, cs) <- runInfer expr
   s       <- runSolve cs
   pure $ apply s t
-
-data CheckError
-  = CheckErrorParse (P.ParseErrorBundle String Void)
-  | CheckErrorInfer (CallStack, String)
-  deriving Show
-
-inferTyOf :: String -> Either CheckError Ty
-inferTyOf = f . P.parse expr "internal"
   where
-    f (Left e)  = Left (CheckErrorParse e)
-    f (Right e) = first CheckErrorInfer (inferTy e)
+    f (Left (cs, e)) = throwError_ e
+    f (Right x)      = pure x
+
+check :: String -> IO (Either String (Expr, Ty))
+check e = do
+  res <- parseFile expr e
+  case res of
+    Left x  -> pure $ Left (show x)
+    Right x -> case inferTy x & runPureEff . runError of
+                 Left (_, x) -> pure $ Left x
+                 Right x'    -> pure $ Right (x, x')

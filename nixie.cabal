@@ -12,6 +12,7 @@ library
   exposed-modules:
       Compile.Nixie.IR
       Compile.Nixie.Phase.Check
+      Compile.Nixie.Phase.Eval
       Text.Nixie
       Text.Nixie.Ast
   hs-source-dirs:
@@ -39,6 +40,7 @@ library
     , containers
     , effectful
     , lens
+    , llvm-tf
     , megaparsec
     , mtl
     , scientific

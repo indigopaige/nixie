@@ -24,6 +24,7 @@ dependencies:
         - containers
         - scientific
         - effectful
+        - llvm-tf
         - some
         - base
         - lens
