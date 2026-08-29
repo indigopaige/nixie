@@ -7,6 +7,7 @@ default-extensions:
         - OverloadedStrings
         - FlexibleContexts
         - TypeApplications
+        - PatternSynonyms
         - ConstraintKinds
         - TemplateHaskell
         - NamedFieldPuns

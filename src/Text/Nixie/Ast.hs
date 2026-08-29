@@ -61,9 +61,9 @@ data Literal
            , Ord
            , Eq
            )
-data Cons
-  = ConsRecord Ident [(Ident, Ident)]
-  | ConsUnit   Ident [Ident]
+data Constructor
+  = ConstructorRecord Ident [(Ident, Ident)]
+  | ConstructorUnit   Ident [Ident]
   deriving ( Show
            , Ord
            , Eq
@@ -71,32 +71,34 @@ data Cons
 
 data Typ = Typ 
   { typName :: Ident
-  , typCons :: [Cons]
+  , typConstructor :: [Constructor]
   }
   deriving ( Show
            , Ord
            , Eq
            )
 
-data Sig
-  = SigArr Sig Sig
-  | SigTyp Ident
-  deriving Show
-
-data Fun = Fun
-  { funNam :: Ident
-  , funExp :: Expression
+data Function= Function
+  { functionNam :: Ident
+  , functionExp :: Expression
   }
   deriving Show
 
-data Def = Def
-  { defSig :: Maybe Sig
-  , defFun :: Fun
+data TypeName
+  = Arr TypeName TypeName
+  | Fst Ident
+  deriving Show
+
+data Signature = Signature
+  { signatureName :: Ident
+  , signatureTypeName :: TypeName
   }
   deriving Show
 
-data Item
-  = ItemTyp Typ
-  | ItemDef Def
+data Definition = Definition
+  { definitionSignature :: Maybe Signature
+  , definitionFunction :: Function
+  }
   deriving Show
+
 

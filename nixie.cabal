@@ -10,9 +10,10 @@ build-type:     Simple
 
 library
   exposed-modules:
+      Compile.Nixie.IR
+      Compile.Nixie.Phase.Check
       Text.Nixie
       Text.Nixie.Ast
-      Text.Nixie.Interpreter
   hs-source-dirs:
       src
   default-extensions:
@@ -22,6 +23,7 @@ library
       OverloadedStrings
       FlexibleContexts
       TypeApplications
+      PatternSynonyms
       ConstraintKinds
       TemplateHaskell
       NamedFieldPuns

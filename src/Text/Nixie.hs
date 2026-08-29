@@ -34,20 +34,20 @@ sym = L.symbol space
 expression :: Nixie Expression
 expression = msum [ con
                   , lht
+                  , try lam
                   , try app
                   , parens expression
-                  , try lam
                   , tup
                   , lst
                   , var
                   , lit
                   ]
   where
-    lam = ExpressionLam <$> pattern <* sym "." <*> expression
+    lam = ExpressionLam <$> patterns <* sym "." <*> expression
 
     lht = do
       sym "let"
-      pat <- pattern
+      pat <- patterns
       space
       sym "="
       exp <- expression
@@ -82,8 +82,8 @@ expression = msum [ con
     lit = ExpressionLit <$> literal
     var = ExpressionVar <$> ident
 
-pattern :: Nixie Pattern
-pattern = msum [ try rcd
+patterns :: Nixie Pattern
+patterns = msum [ try rcd
                , try unt
                , try bnd
                , lit
@@ -92,11 +92,11 @@ pattern = msum [ try rcd
                , lst
                ]
   where
-    rcd = PatternRec <$> ident <* space <*> braces (sepByComma pattern)
-    bnd = PatternBnd <$> ident <* L.symbol space "@" <*> pattern
-    unt = PatternUnt <$> ident <* space <*> sepBySpace1 pattern
-    lst = PatternLst <$> brackets (sepByComma pattern)
-    tup = PatternTup <$> parens (sepByComma pattern)
+    rcd = PatternRec <$> ident <* space <*> braces (sepByComma patterns)
+    bnd = PatternBnd <$> ident <* L.symbol space "@" <*> patterns
+    unt = PatternUnt <$> ident <* space <*> sepBySpace1 patterns
+    lst = PatternLst <$> brackets (sepByComma patterns)
+    tup = PatternTup <$> parens (sepByComma patterns)
     lit = PatternLit <$> literal
     var = PatternVar <$> ident
 
@@ -122,16 +122,16 @@ ident = do
     g = char '_' >> some alphaNumChar
     h = match $ msum [f, g]
 
-constructor :: Nixie Cons
+constructor :: Nixie Constructor
 constructor = msum [ try rcd
                    , unt
                    ]
   where
-    rcd = ConsRecord <$> ident <* space <*> braces (sepByComma f)
+    rcd = ConstructorRecord <$> ident <* space <*> braces (sepByComma f)
       where
         f = (,) <$> ident <* (space *> sym ":") <*> ident
 
-    unt = ConsUnit <$> ident <* space <*> sepBySpace ident
+    unt = ConstructorUnit <$> ident <* space <*> sepBySpace ident
 
 typ :: Nixie Typ
 typ = do
@@ -145,48 +145,40 @@ typ = do
 -- name : Type
 -- name = expr
 
-sig :: Nixie Sig
-sig = do
+signature :: Nixie Signature
+signature = do
   name <- ident
   space
   sym ":"
-  ty
+  Signature name <$> ty
   where
-    ty = try arrow <|> SigTyp <$> ident
+    ty = try arrow <|> Fst <$> ident
       where
         arrow = do
-          left <- SigTyp <$> ident
+          left <- Fst <$> ident
           space
           sym "->"
-          SigArr left <$> ty
+          Arr left <$> ty
 
-fun :: Nixie Fun
-fun = do
+function :: Nixie Function
+function = do
   name <- ident
   space
   sym "="
   expr <- expression
-  pure $ Fun name expr
+  pure $ Function name expr
 
-
-def :: Nixie Def
-def = do
-  s <- optional (try sig)
+definition :: Nixie Definition
+definition = do
+  s <- optional (try signature)
   if isJust s
   then do
        space
-       f <- fun
-       pure $ Def s f
+       f <- function
+       pure $ Definition s f
   else do
-       f <- fun
-       pure $ Def s f
-  where
-
-item :: Nixie Item
-item = (ItemTyp <$> typ) <|> (ItemDef <$> def)
-
-nixie :: Nixie [Item]
-nixie = many $ item <* space
+       f <- function
+       pure $ Definition s f
 
 parseFile :: Nixie a -> String -> IO (Either (ParseErrorBundle String Void ) a)
 parseFile m file = parse m file <$> readFile file
