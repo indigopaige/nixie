@@ -73,7 +73,7 @@ eval (ExprLet v b) = do
   v' <- eval v
   eval $ shift (-1) 0 $ subst 0 (shift 1 0 v') b
 
-eval (ExprAbs b)     = ExprAbs <$> eval b
+eval (ExprAbs b)     = pure (ExprAbs b)
 
 eval (ExprCnd c t e) = do
   c' <- eval c

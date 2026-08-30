@@ -17,6 +17,8 @@ import Text.Nixie
 import Data.Void
 import Effectful
 
+import Debug.Trace
+
 data ExecError
   = ExecErrorNoMain
   | ExecErrorDupMain
@@ -44,8 +46,8 @@ exec fileName = parseFile program fileName >>= f
     f ProgramResultNoMain           = throwError ExecErrorNoMain
     f ProgramResultDupMain          = throwError ExecErrorDupMain
     f (ProgramResultItems mf items) = do
-      traverse_ inferTy items
       local @(Map Ident Expr) (Map.union (itemsEnv items)) $ do
+        traverse_ inferTy items
         inferTy mf
         eval (mf^.fnDefFun.fnFunExpr)
 

@@ -32,6 +32,7 @@ type Context     = [Scheme]
 data Scheme      = Forall (Set.Set TyVar) Ty
 type Count       = Int
 
+type Tys = Map Ident Ty
 data Env = Env (Map Ident Expr) (Map Ident Ty)
 
 type Infer es =
@@ -41,6 +42,7 @@ type Infer es =
   , Reader Context :> es
   , Error String :> es
   , State Count :> es
+  , State Tys :> es
   )
 
 constrain :: Infer es => Ty -> Ty -> Eff es ()
@@ -117,12 +119,23 @@ instance Inferable Expr where
   infer = \case
     ExprUnb (i@(Ident x)) -> do
       m  <- ask @(Map Ident Scheme)
-      m' <- ask @(Map Ident Expr)
       case Map.lookup i m of
         Just x  -> instantiate x
-        Nothing -> case Map.lookup i m' of
-          Just x  -> infer x
-          Nothing -> throwError $ "unbound variable " <> x
+        Nothing -> do
+          tys <- get @Tys
+
+          case Map.lookup i tys of
+            Just x  -> pure x
+            Nothing -> do
+              m' <- ask @(Map Ident Expr)
+
+              case Map.lookup i m' of
+                Just x  -> do
+                  ty <- fresh
+                  modify @Tys (Map.insert i ty)
+                  ty' <- infer x
+                  pure ty'
+                Nothing -> throwError $ "unbound variable " <> x
 
     -- primitive function types
     ExprInt _         -> pure TyInt
@@ -222,6 +235,7 @@ runInfer :: (Inferable i, InferTy es) => i -> Eff es (Ty, Constraints)
 runInfer i = infer i & evalState @Count 0
                 . runReader @Context []
                 . runWriter @Constraints
+                . evalState @Tys mempty
 
 inferTy :: (Inferable i, InferTy es) => i -> Eff es Ty
 inferTy expr = do
