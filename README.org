@@ -2,7 +2,7 @@
 #+title:  nixie
 
 * Synopsis
-Nixie is a small functional programming language made to be as close to lambda calculus as possible, whilst also being a powerful and pragmatic high level programming language that can get real world work done.
+Nixie is a small functional programming language
 
 * Structure
 Nixie is structured in a few main parts that are called source components.

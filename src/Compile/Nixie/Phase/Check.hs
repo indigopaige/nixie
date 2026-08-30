@@ -24,14 +24,19 @@ import Data.Void
 import Control.Lens ((&), (^.))
 
 type Constraints = [Constraint]
+
 data Constraint  = Constraint Ty Ty
   deriving Show
+
 type Context     = [Scheme]
 data Scheme      = Forall (Set.Set TyVar) Ty
 type Count       = Int
 
+data Env = Env (Map Ident Expr) (Map Ident Ty)
+
 type Infer es =
-  ( Reader (Map Ident Expr) :> es
+  ( Reader (Map Ident Scheme) :> es
+  , Reader (Map Ident Expr) :> es
   , Writer Constraints :> es
   , Reader Context :> es
   , Error String :> es
@@ -95,86 +100,84 @@ checkFnDef fn = do
     Nothing -> pure ()
     Just x  -> constrain act (x^.fnSigTy)
 
-infer :: Infer es => Expr -> Eff es Ty
-infer = \case
-  ExprUnb (i@(Ident x)) -> f
-    where
-      f = g x
-        where
-          g "equal"   = do
-            a <- fresh
-            pure $ a :-> a :-> TyBin
+class Inferable a where
+  infer :: Infer es => a -> Eff es Ty
 
-          g "add_wrd" = pure $ TyWrd :-> TyWrd :-> TyWrd
-          g "sub_wrd" = pure $ TyWrd :-> TyWrd :-> TyWrd
-          g "mul_wrd" = pure $ TyWrd :-> TyWrd :-> TyWrd
-          g "div_wrd" = pure $ TyWrd :-> TyWrd :-> TyWrd
-          g "add_int" = pure $ TyInt :-> TyInt :-> TyInt
-          g "sub_int" = pure $ TyInt :-> TyInt :-> TyInt
-          g "mul_int" = pure $ TyInt :-> TyInt :-> TyInt
-          g "div_int" = pure $ TyInt :-> TyInt :-> TyInt
-          g "add_dec" = pure $ TyDec :-> TyDec :-> TyDec
-          g "sub_dec" = pure $ TyDec :-> TyDec :-> TyDec
-          g "mul_dec" = pure $ TyDec :-> TyDec :-> TyDec
-          g "div_dec" = pure $ TyDec :-> TyDec :-> TyDec
-          g x         = do
-            m <- ask @(Map Ident Expr)
-            case Map.lookup i m of
-              Just x  -> infer x
-              Nothing -> throwError $ "unbound variable " <> x
+instance Inferable FnDef where
+  infer (FnDef (Just sig) body) = do
+    a <- fresh
+    constrain a (sig^.fnSigTy)
+    b <- infer (body^.fnFunExpr)
+    constrain b a
+    pure b
 
-  ExprInt _         -> pure TyInt
-  ExprDec _         -> pure TyDec
-  ExprWrd _         -> pure TyWrd
-  ExprStr _         -> pure TyStr
-  ExprChr _         -> pure TyChr
-  ExprBin _         -> pure TyBin
+  infer (FnDef _ body) = infer (body^.fnFunExpr)
 
-  ExprTup s         -> do
-    sts <- traverse infer s
-    pure $ TyTup sts
+instance Inferable Expr where
+  infer = \case
+    ExprUnb (i@(Ident x)) -> do
+      m  <- ask @(Map Ident Scheme)
+      m' <- ask @(Map Ident Expr)
+      case Map.lookup i m of
+        Just x  -> instantiate x
+        Nothing -> case Map.lookup i m' of
+          Just x  -> infer x
+          Nothing -> throwError $ "unbound variable " <> x
 
-  ExprLst s         -> do
-    sts <- traverse infer s
-    f   <- fresh
+    -- primitive function types
+    ExprInt _         -> pure TyInt
+    ExprDec _         -> pure TyDec
+    ExprStr _         -> pure TyStr
+    ExprChr _         -> pure TyChr
+    ExprBin _         -> pure TyBin
 
-    traverse_ (constrain f) sts
-    pure $ TyLst f
+    ExprTup s         -> do
+      sts <- traverse infer s
+      pure $ TyTup sts
 
-  ExprVar ix        -> do
-    ctx <- ask @Context
-    case drop (fromIntegral ix) ctx of
-      (t : _) -> instantiate t
-      []      -> throwError "variable not defined" -- should never happen if created via expr
-  ExprCnd c a b     -> do
-    ct <- infer c
-    at <- infer a
-    bt <- infer b
-    constrain ct TyBin
-    constrain at bt
-    pure at
-  ExprAbs e         -> do
-    pt <- fresh
-    let ps = Forall Set.empty pt
-    et <- local (ps :) (infer e)
-    pure $ pt :-> et
-  ExprApp f a       -> do
-    ft <- infer f
-    at <- infer a
-    rt <- fresh
-    constrain ft (at :-> rt)
-    pure rt
-  ExprLet e b       -> do
-    (et, cs) <- listen (infer e)
-    case runSolve cs of
-      Left (_, err) -> throwError err
-      Right subst   -> do
-        let et' = apply subst et
-        ctx  <- ask
-        let ctx' = apply subst ctx
-        let es   = generalize ctx' et'
-        local (const (es : ctx')) (infer b)
+    ExprLst s         -> do
+      sts <- traverse infer s
+      f   <- fresh
 
+      traverse_ (constrain f) sts
+      pure $ TyLst f
+
+    ExprVar ix        -> do
+      ctx <- ask @Context
+      case drop (fromIntegral ix) ctx of
+        (t : _) -> instantiate t
+        []      -> throwError "variable not defined" -- should never happen if created via expr
+
+    ExprCnd c a b     -> do
+      ct <- infer c
+      at <- infer a
+      bt <- infer b
+      constrain ct TyBin
+      constrain at bt
+      pure at
+
+    ExprAbs e         -> do
+      pt <- fresh
+      let ps = Forall Set.empty pt
+      et <- local (ps :) (infer e)
+      pure $ pt :-> et
+
+    ExprApp f a       -> do
+      ft <- infer f
+      at <- infer a
+      rt <- fresh
+      constrain ft (at :-> rt)
+      pure rt
+
+    ExprLet e b       -> do
+      (et, cs) <- listen (infer e)
+      subst    <- runSolve cs
+      let et' = apply subst et
+      ctx      <- ask
+      let ctx' = apply subst ctx
+      let es   = generalize ctx' et'
+      local (const (es : ctx')) (infer b)
+ 
 type Solve es =
   (  Error String :> es
   )
@@ -183,6 +186,7 @@ unify :: Solve es => Ty -> Ty -> Eff es Subst
 unify a b | a == b     = pure $ Map.empty
 unify (TyVar v) t      = bind v t
 unify t (TyVar v)      = bind v t
+
 unify a@(TyCon n ts) b@(TyCon n' ts')
   | n /= n'            = throwError $ "type mismatch " <> show a <> " and " <> show b
   | otherwise          = unifyMany ts ts'
@@ -195,6 +199,7 @@ unify a@(TyCon n ts) b@(TyCon n' ts')
 
 bind :: Solve es => TyVar -> Ty -> Eff es Subst
 bind v t
+  -- occurs check
   | v `Set.member` tvs t = throwError $ "infinite type " <> show v <> " ~ " <> show t
   | otherwise            = pure $ Map.singleton v t
 
@@ -204,46 +209,25 @@ solve s ((Constraint t t') : cs) = do
   s' <- unify t t'
   solve (s' `compose` s) (apply s' cs)
 
-runSolve :: [Constraint] -> Either (CallStack, String) Subst
-runSolve = (runPureEff . runError) . solve Map.empty
+runSolve :: Error String :> es => [Constraint] -> Eff es Subst
+runSolve = solve Map.empty
 
-runInferFn :: Map Ident Expr -> FnDef -> Either (CallStack, String) (Ty, Constraints)
-runInferFn env fn = m & runPureEff
-                . runError @String
-                . evalState @Count 0
+type InferTy es =
+  ( Reader (Map Ident Scheme) :> es
+  , Reader (Map Ident Expr) :> es
+  , Error String :> es
+  )
+
+runInfer :: (Inferable i, InferTy es) => i -> Eff es (Ty, Constraints)
+runInfer i = infer i & evalState @Count 0
                 . runReader @Context []
                 . runWriter @Constraints
-                . runReader @(Map Ident Expr) env
-  where
-    m = do
-      ty <- infer $ fn^.fnDefFun.fnFunExpr
-      case fn^.fnDefSig of
-        Just s | s^.fnSigName == fn^.fnDefFun.fnFunName -> constrain ty (s^.fnSigTy)
-        _                                               -> pure ()
-      pure ty
 
-runInfer :: Map Ident Expr -> Expr -> Either (CallStack, String) (Ty, Constraints)
-runInfer env expr = infer expr & runPureEff
-                . runError @String
-                . evalState @Count 0
-                . runReader @Context []
-                . runWriter @Constraints
-                . runReader @(Map Ident Expr) env
-
-inferExprTy :: Error String :> es => Map Ident Expr -> Expr -> Eff es Ty
-inferExprTy env expr = f $ do
-  (t, cs) <- runInfer env expr
+inferTy :: (Inferable i, InferTy es) => i -> Eff es Ty
+inferTy expr = do
+  (t, cs) <- runInfer expr
   s       <- runSolve cs
   pure $ apply s t
-  where
-    f (Left (_, e)) = throwError_ e
-    f (Right x)     = pure x
 
-inferFnTy :: Error String :> es => Map Ident Expr -> FnDef -> Eff es Ty
-inferFnTy env fn = f $ do
-  (t, cs) <- runInferFn env fn
-  s       <- runSolve cs
-  pure $ apply s t
-  where
-    f (Left (_, e)) = throwError_ e
-    f (Right x)      = pure x
+mon :: Ty -> Scheme
+mon = Forall mempty

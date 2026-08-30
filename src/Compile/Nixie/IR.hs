@@ -16,17 +16,16 @@ data Expr
   = ExprCnd Expr Expr Expr
   | ExprLet Expr Expr
   | ExprApp Expr Expr
+  | ExprInt Integer
   | ExprDec Double
   | ExprStr String
   | ExprLst [Expr]
   | ExprTup [Expr]
   | ExprUnb Ident
-  | ExprWrd Word
   | ExprBin Bool
   | ExprChr Char
   | ExprAbs Expr
   | ExprVar Int
-  | ExprInt Int
   deriving ( Show
            , Ord
            , Eq
@@ -47,11 +46,8 @@ fromExpression expr = f expr & runPureEff . runReader @[Ident] []
         g (LiteralChar chr)   = ExprChr chr
         g (LiteralBool bin)   = ExprBin bin
 
-        g (LiteralNumber num)
-          | Left r  <- floatingOrInteger num = ExprDec (realToFrac r)
-          | Right r <- floatingOrInteger num = if signum r == -1
-                                               then ExprInt (fromIntegral r)
-                                               else ExprWrd (fromIntegral r)
+        g (LiteralInteger i)  = ExprInt i
+        g (LiteralDecimal d)  = ExprDec d
 
         g (LiteralString str) = ExprStr str
     f (ExpressionVar var)         = g . elemIndex var <$> ask
@@ -72,9 +68,8 @@ data Ty
 infixr 9 :->
 
 pattern TyLst a = TyCon (Ident "lst") [a]
-pattern TyTup a = TyCon (Ident "lst") a
+pattern TyTup a = TyCon (Ident "tup") a
 pattern TyInt   = TyCon (Ident "int") []
-pattern TyWrd   = TyCon (Ident "wrd") []
 pattern TyDec   = TyCon (Ident "dec") []
 pattern TyStr   = TyCon (Ident "str") []
 pattern TyChr   = TyCon (Ident "chr") []
@@ -82,39 +77,9 @@ pattern TyBin   = TyCon (Ident "bin") []
 pattern a :-> b = TyCon (Ident "->") [a, b]
 
 -- Builtin primitive types are assigned from identifiers here, they are not reserved names, but resesrved types
-fromTypeName :: TypeName -> Ty
-fromTypeName (Arr left right)        = (fromTypeName left) :-> (fromTypeName right)
-fromTypeName (Fst ident@(Ident(id))) = f id
-  where
-    f "int" = TyCon ident []
-    f "dec" = TyCon ident []
-    f "wrd" = TyCon ident []
-    f "str" = TyCon ident []
-    f "chr" = TyCon ident []
-    f "bin" = TyCon ident []
-    f _     = TyCon ident []
-
--- Wrapper for instances, nothing special
-newtype Cons = Cons Constructor
-  deriving ( Show
-           , Ord
-           , Eq
-           )
-
-fromConstructor :: Constructor -> Cons
-fromConstructor = Cons
-
-data TyDef = TyDef
-  { _tyName :: Ident
-  , _tyCons :: [Cons]
-  }
-  deriving ( Show
-           , Ord
-           , Eq
-           )
-
-fromTyp :: Typ -> TyDef
-fromTyp (Typ n c) = TyDef n (map fromConstructor c)
+fromType :: Type -> Ty
+fromType (TypeArr left right) = (fromType left) :-> (fromType right)
+fromType (TypeCon ident args) = TyCon ident (map fromType args)
 
 data FnSig = FnSig
   { _fnSigName :: Ident
@@ -143,44 +108,40 @@ data FnDef = FnDef
            , Eq
            )
 
-fromFunction :: Definition -> FnDef
-fromFunction (Definition s f) = FnDef sf ff
+fromFunctionDefinition :: FunctionDefinition -> FnDef
+fromFunctionDefinition (FunctionDefinition s f) = FnDef sf ff
   where
-    sf = (\s -> FnSig (signatureName s) $ fromTypeName (signatureTypeName s)) <$> s
-    ff = FnFun (functionNam f) $ fromExpression (functionExp f)
+    sf = (\s -> FnSig (functionSignatureName s) $ fromType (functionSignatureType s)) <$> s
+    ff = FnFun (functionBodyName f) $ fromExpression (functionBodyExpr f)
 
 makeLenses ''FnDef
 makeLenses ''FnSig
 makeLenses ''FnFun
-makeLenses ''TyDef
-
-data Item
-  = ItemFnDef FnDef
-  | ItemTyDef TyDef
-  deriving ( Show
-           , Ord
-           , Eq
-           )
 
 expr :: Nixie Expr
 expr = fromExpression <$> expression
 
-item :: Nixie Item
+fnDef :: Nixie FnDef
+fnDef = fromFunctionDefinition <$> functionDefinition
 
-item = fmap g definition <|> fmap f typ
+items :: Nixie [FnDef]
+items = many $ do { fnDef <* C.space }
+
+data ProgramResult
+  = ProgramResultItems FnDef [FnDef]
+  | ProgramResultDupMain
+  | ProgramResultNoMain
+  deriving Show
+
+program :: Nixie ProgramResult
+program = f <$> items
   where
-    g = ItemFnDef . fromFunction
-    f = ItemTyDef . fromTyp
+    f x  = case partition g x of
+             ((_:_:xs), _) -> ProgramResultDupMain
+             ([], _)       -> ProgramResultNoMain
+             ([x], xs)     -> ProgramResultItems x xs
 
-prog :: Nixie (Maybe ([Item], Item))
-prog = splitMain <$> many (item <* C.space)
-  where
-    splitMain items       = case partition isMain items of
-      ([m], rest) -> Just (rest, m)
-      _           -> Nothing
-
-    isMain (ItemFnDef fd) = fd^.fnDefFun.fnFunName == Ident "main"
-    isMain _              = False
+    g fn = fn^.fnDefFun.fnFunName == (Ident "main")
 
 -- Expr functions for working with debruijn indicies
 shift :: Int -> Int -> Expr -> Expr

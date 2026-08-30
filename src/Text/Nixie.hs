@@ -1,21 +1,26 @@
 module Text.Nixie where
 
 import qualified Text.Megaparsec.Char.Lexer as L
+import Effectful.Error.Static
 import Text.Megaparsec.Char
 import Text.Megaparsec
 import Text.Nixie.Ast
 import Control.Monad
 import Debug.Trace
 import Data.Maybe
+import Effectful
 import Data.Void
 
 type Nixie = Parsec Void String
 
 parens, braces, angles, brackets :: Nixie a -> Nixie a
-parens    = between (L.symbol space "(" <* space) (space *> L.symbol space ")")
-braces    = between (L.symbol space "{" <* space) (space *> L.symbol space "}")
-angles    = between (L.symbol space "<" <* space) (space *> L.symbol space ">")
-brackets  = between (L.symbol space "[" <* space) (space *> L.symbol space "]")
+parens    = between (L.symbol hspace "(" <* hspace) (hspace *> L.symbol hspace ")")
+braces    = between (L.symbol hspace "{" <* hspace) (hspace *> L.symbol hspace "}")
+angles    = between (L.symbol hspace "<" <* hspace) (hspace *> L.symbol hspace ">")
+brackets  = between (L.symbol hspace "[" <* hspace) (hspace *> L.symbol hspace "]")
+
+sym :: String -> Nixie String
+sym s = hspace *> L.symbol hspace s
 
 sepBySpace, sepBySpace1 :: Nixie a -> Nixie [a]
 
@@ -25,21 +30,15 @@ sepBySpace  = (`sepBy` hspace)
 sepByComma :: Nixie a -> Nixie [a]
 sepByComma = (`sepBy` sym ",")
 
-sepByBar :: Nixie a -> Nixie [a]
-sepByBar = (`sepBy` sym "|")
-
-sym :: String -> Nixie String
-sym = L.symbol space
-
 expression :: Nixie Expression
-expression = msum [ con
+expression = msum [ lit
+                  , con
                   , lht
                   , try lam
                   , try app
                   , tup
                   , lst
                   , var
-                  , lit
                   , parens expression
                   ]
   where
@@ -48,10 +47,8 @@ expression = msum [ con
     lht = do
       sym "let"
       pat <- patterns
-      space
       sym "="
       exp <- expression
-      space
       sym "in"
       exp' <- expression
       pure $ ExpressionLet pat exp exp'
@@ -59,10 +56,8 @@ expression = msum [ con
     con = do
       sym "if"
       eval <- expression
-      space
       sym "then"
       runt <- expression
-      space
       sym "else"
       runf <- expression
       pure $ ExpressionCon eval runt runf
@@ -83,18 +78,14 @@ expression = msum [ con
     var = ExpressionVar <$> ident
 
 patterns :: Nixie Pattern
-patterns = msum [ try rcd
-               , try unt
-               , try bnd
-               , lit
-               , var
-               , tup
-               , lst
+patterns = msum [ try bnd
+               ,  lit
+               ,  var
+               ,  tup
+               ,  lst
                ]
   where
-    rcd = PatternRec <$> ident <* space <*> braces (sepByComma patterns)
-    bnd = PatternBnd <$> ident <* L.symbol space "@" <*> patterns
-    unt = PatternUnt <$> ident <* space <*> sepBySpace1 patterns
+    bnd = PatternBnd <$> ident <* sym "@" <*> patterns
     lst = PatternLst <$> brackets (sepByComma patterns)
     tup = PatternTup <$> parens (sepByComma patterns)
     lit = PatternLit <$> literal
@@ -105,7 +96,14 @@ literal = msum [ number
                , bool
                ]
   where
-    number = LiteralNumber <$> L.scientific <?> "literal number"
+    number = msum
+      [ LiteralDecimal <$> try f
+      , LiteralInteger <$> i
+      ]
+      where
+        f = L.signed hspace L.float
+        i = L.signed hspace L.decimal
+
     bool   = f <|> t <?> "literal bool"
       where
         f = LiteralBool False <$ string "false"
@@ -122,63 +120,57 @@ ident = do
     g = char '_' >> some alphaNumChar
     h = match $ msum [f, g]
 
-constructor :: Nixie Constructor
-constructor = msum [ try rcd
-                   , unt
-                   ]
-  where
-    rcd = ConstructorRecord <$> ident <* space <*> braces (sepByComma f)
-      where
-        f = (,) <$> ident <* (space *> sym ":") <*> ident
+functionDefinition :: Nixie FunctionDefinition
+functionDefinition = do
+  s <- optional (try functionSignature)
 
-    unt = ConstructorUnit <$> ident <* space <*> sepBySpace ident
+  let g = FunctionDefinition s <$> functionBody
 
-typ :: Nixie Typ
-typ = do
-  sym "type"
+  if isJust s
+  then space >> g
+  else g
+
+functionSignature :: Nixie FunctionSignature
+functionSignature = do
   name <- ident
-  hspace
-  sym "="
-  cons <- sepByBar constructor
-  pure $ Typ name cons
-
--- name : Type
--- name = expr
-
-signature :: Nixie Signature
-signature = do
-  name <- ident
-  space
   sym ":"
-  Signature name <$> ty
+  FunctionSignature name <$> ty
   where
-    ty = try arrow <|> Fst <$> ident
+    ty = msum [ parens ty
+              , try arrow
+              , con
+              ]
       where
-        arrow = do
-          left <- Fst <$> ident
+        atm   = con <|> parens arrow
+        con   = do
+          name <- ident
           space
+          args <- option [] (brackets $ sepByComma atm)
+          pure $ TypeCon name args
+        arrow = do
+          left <- con
           sym "->"
-          Arr left <$> ty
+          TypeArr left <$> ty
 
-function :: Nixie Function
-function = do
+functionBody :: Nixie FunctionBody
+functionBody = do
   name <- ident
-  space
   sym "="
   expr <- expression
   pure $ Function name expr
 
-definition :: Nixie Definition
-definition = do
-  s <- optional (try signature)
-  if isJust s
-  then do
-       space
-       f <- function
-       pure $ Definition s f
-  else do
-       f <- function
-       pure $ Definition s f
+type ParseFile es =
+  ( Error (ParseErrorBundle String Void) :> es
+  , IOE :> es
+  )
 
-parseFile :: Nixie a -> String -> IO (Either (ParseErrorBundle String Void ) a)
-parseFile m file = parse m file <$> readFile file
+-- First function to call, lifting parse errors into the effect stack
+parseFile :: ParseFile es => Nixie a -> String -> Eff es a
+parseFile m file = do
+  file' <- liftIO $ readFile file
+  case parse m file file' of
+    Left  x -> throwError x
+    Right x -> pure x
+
+runParseFile :: Nixie a -> String -> IO (Either (ParseErrorBundle String Void) a)
+runParseFile m s = runEff . runErrorNoCallStack @(ParseErrorBundle String Void) $ parseFile m s

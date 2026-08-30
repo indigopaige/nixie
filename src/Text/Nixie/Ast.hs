@@ -32,9 +32,7 @@ data Expression
            )
 
 data Pattern
-  = PatternRec Ident [Pattern]
-  | PatternUnt Ident [Pattern]
-  | PatternBnd Ident Pattern
+  = PatternBnd Ident Pattern
   | PatternTup [Pattern]
   | PatternLst [Pattern]
   | PatternLit Literal
@@ -45,7 +43,6 @@ data Pattern
              )
 
 vars :: Pattern -> [Ident]
-vars (PatternUnt _ x) = x >>= vars
 vars (PatternBnd _ p) = vars p
 vars (PatternTup x)   = x >>= vars
 vars (PatternLst x)   = x >>= vars
@@ -53,7 +50,8 @@ vars (PatternLit _)   = []
 vars (PatternVar x)   = [x]
 
 data Literal
-  = LiteralNumber Scientific
+  = LiteralInteger Integer
+  | LiteralDecimal Double
   | LiteralString String
   | LiteralBool Bool
   | LiteralChar Char
@@ -61,44 +59,38 @@ data Literal
            , Ord
            , Eq
            )
-data Constructor
-  = ConstructorRecord Ident [(Ident, Ident)]
-  | ConstructorUnit   Ident [Ident]
-  deriving ( Show
-           , Ord
-           , Eq
-           )
 
-data Typ = Typ 
-  { typName :: Ident
-  , typConstructor :: [Constructor]
+data FunctionDefinition = FunctionDefinition
+  { functinonDefinitionFunctionSignature :: Maybe FunctionSignature
+  , functinonDefinitionFuntionBody      :: FunctionBody
   }
   deriving ( Show
            , Ord
            , Eq
            )
 
-data Function= Function
-  { functionNam :: Ident
-  , functionExp :: Expression
+data FunctionSignature = FunctionSignature
+  { functionSignatureName :: Ident
+  , functionSignatureType :: Type
   }
-  deriving Show
+  deriving ( Show
+           , Ord
+           , Eq
+           )
 
-data TypeName
-  = Arr TypeName TypeName
-  | Fst Ident
-  deriving Show
-
-data Signature = Signature
-  { signatureName :: Ident
-  , signatureTypeName :: TypeName
+data FunctionBody = Function
+  { functionBodyName :: Ident
+  , functionBodyExpr :: Expression
   }
-  deriving Show
+  deriving ( Show
+           , Ord
+           , Eq
+           )
 
-data Definition = Definition
-  { definitionSignature :: Maybe Signature
-  , definitionFunction :: Function
-  }
-  deriving Show
-
-
+data Type
+  = TypeArr Type Type
+  | TypeCon Ident [Type]
+  deriving ( Show
+           , Ord
+           , Eq
+           )

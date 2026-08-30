@@ -10,9 +10,11 @@ build-type:     Simple
 
 library
   exposed-modules:
+      Compile.Nixie.Env
       Compile.Nixie.IR
       Compile.Nixie.Phase.Check
       Compile.Nixie.Phase.Eval
+      Compile.Nixie.Phase.Exec
       Text.Nixie
       Text.Nixie.Ast
   hs-source-dirs:
