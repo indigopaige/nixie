@@ -57,17 +57,3 @@ Patterns in nixie are used to bind values to variables and destructure native st
 #+begin_src
   both@(x, y)
 #+end_src
-** Type
-Nixie types are simply records or unit types.
-
-*** Record
-#+begin_src
-  type point
-    = Point { x : int, y : int }
-#+end_src
-
-*** Unit
-#+begin_src
-  type point = Point int int
-  
-#+end_src
