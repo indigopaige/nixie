@@ -132,20 +132,7 @@ instance Inferable Expr where
     -- primitive function types
     ExprInt _         -> pure TyInt
     ExprDec _         -> pure TyDec
-    ExprStr _         -> pure TyStr
-    ExprChr _         -> pure TyChr
     ExprBin _         -> pure TyBin
-
-    ExprTup s         -> do
-      sts <- traverse infer s
-      pure $ TyTup sts
-
-    ExprLst s         -> do
-      sts <- traverse infer s
-      f   <- fresh
-
-      traverse_ (constrain f) sts
-      pure $ TyLst f
 
     ExprVar ix        -> do
       ctx <- ask @Context

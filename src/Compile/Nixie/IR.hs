@@ -18,12 +18,8 @@ data Expr
   | ExprApp Expr Expr
   | ExprInt Integer
   | ExprDec Double
-  | ExprStr String
-  | ExprLst [Expr]
-  | ExprTup [Expr]
   | ExprUnb Ident
   | ExprBin Bool
-  | ExprChr Char
   | ExprAbs Expr
   | ExprVar Int
   deriving ( Show
@@ -39,17 +35,12 @@ fromExpression expr = f expr & runPureEff . runReader @[Ident] []
     f (ExpressionCon fst snd thd) = ExprCnd <$> f fst <*> f snd <*> f thd
     f (ExpressionLam pat expr)    = local (vars pat ++) $ ExprAbs <$> f expr
     f (ExpressionApp fst snd)     = ExprApp <$> f fst <*> f snd
-    f (ExpressionLst lst)         = ExprLst <$> traverse f lst
-    f (ExpressionTup tup)         = ExprTup <$> traverse f tup
     f (ExpressionLit lit)         = pure $ g lit
       where
-        g (LiteralChar chr)   = ExprChr chr
         g (LiteralBool bin)   = ExprBin bin
 
         g (LiteralInteger i)  = ExprInt i
         g (LiteralDecimal d)  = ExprDec d
-
-        g (LiteralString str) = ExprStr str
     f (ExpressionVar var)         = g . elemIndex var <$> ask
       where
         g (Just x) = ExprVar (fromIntegral x)
@@ -67,12 +58,8 @@ data Ty
 
 infixr 9 :->
 
-pattern TyLst a = TyCon (Ident "lst") [a]
-pattern TyTup a = TyCon (Ident "tup") a
 pattern TyInt   = TyCon (Ident "int") []
 pattern TyDec   = TyCon (Ident "dec") []
-pattern TyStr   = TyCon (Ident "str") []
-pattern TyChr   = TyCon (Ident "chr") []
 pattern TyBin   = TyCon (Ident "bin") []
 pattern a :-> b = TyCon (Ident "->") [a, b]
 

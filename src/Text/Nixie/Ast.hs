@@ -22,8 +22,6 @@ data Expression
   | ExpressionLet Pattern Expression Expression
   | ExpressionApp Expression Expression
   | ExpressionLam Pattern Expression
-  | ExpressionLst [Expression]
-  | ExpressionTup [Expression]
   | ExpressionLit Literal
   | ExpressionVar Ident
   deriving ( Show
@@ -32,27 +30,19 @@ data Expression
            )
 
 data Pattern
-  = PatternTup [Pattern]
-  | PatternLst [Pattern]
-  | PatternLit Literal
-  | PatternVar Ident
+  = PatternVar Ident
     deriving ( Show
              , Ord
              , Eq
              )
 
 vars :: Pattern -> [Ident]
-vars (PatternTup x)   = x >>= vars
-vars (PatternLst x)   = x >>= vars
-vars (PatternLit _)   = []
 vars (PatternVar x)   = [x]
 
 data Literal
   = LiteralInteger Integer
   | LiteralDecimal Double
-  | LiteralString String
   | LiteralBool Bool
-  | LiteralChar Char
   deriving ( Show
            , Ord
            , Eq

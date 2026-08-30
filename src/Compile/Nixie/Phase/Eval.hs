@@ -32,9 +32,6 @@ subst j s = f 0
 
         g (ExprLet v b)   = ExprLet (f d v) (f (d + 1) b)
 
-        g (ExprLst l)     = ExprLst (map (f d) l)
-        g (ExprTup t)     = ExprTup (map (f d) t)
-
         g x               = x
 
 type Env' es =
@@ -80,6 +77,4 @@ eval (ExprCnd c t e) = do
     ExprBin False -> eval e
     c'            -> pure $ ExprCnd c' t e
 
-eval (ExprLst xs)    = ExprLst <$> mapM eval xs
-eval (ExprTup xs)    = ExprTup <$> mapM eval xs
 eval e               = pure e

@@ -36,8 +36,6 @@ expression = msum [ lit
                   , lht
                   , try lam
                   , try app
-                  , tup
-                  , lst
                   , var
                   , parens expression
                   ]
@@ -72,21 +70,13 @@ expression = msum [ lit
                    , var
                    ]
 
-    lst = ExpressionLst <$> brackets (sepByComma expression)
-    tup = ExpressionTup <$> parens (sepByComma expression)
     lit = ExpressionLit <$> literal
     var = ExpressionVar <$> ident
 
 patterns :: Nixie Pattern
-patterns = msum [ lit
-               ,  var
-               ,  tup
-               ,  lst
-               ]
+patterns = msum [ var
+                ]
   where
-    lst = PatternLst <$> brackets (sepByComma patterns)
-    tup = PatternTup <$> parens (sepByComma patterns)
-    lit = PatternLit <$> literal
     var = PatternVar <$> ident
 
 literal :: Nixie Literal
