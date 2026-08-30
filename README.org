@@ -30,30 +30,6 @@ Nixie has many different kinds of expressions
 #+begin_src
   if true then x else y
 #+end_src
-** Pattern
-Patterns in nixie are used to bind values to variables and destructure native structures.
-
-*** Record Type
-#+begin_src
- (A { x, y, z }) 
-#+end_src
-*** Unit Type
-#+begin_src
-  (A x)
-#+end_src
-*** Variable
-#+begin_src
-  x
-#+end_src
-*** Tuple
-#+begin_src
-  (x, y)
-#+end_src
-*** List
-#+begin_src
-  [a, b]
-#+end_src
-*** Name
 #+begin_src
   both@(x, y)
 #+end_src
