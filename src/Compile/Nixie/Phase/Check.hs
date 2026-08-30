@@ -149,7 +149,7 @@ instance Inferable Expr where
 
     ExprVar ix        -> do
       ctx <- ask @Context
-      case drop (fromIntegral ix) ctx of
+      case drop ix ctx of
         (t : _) -> instantiate t
         []      -> throwError "variable not defined" -- should never happen if created via expr
 
