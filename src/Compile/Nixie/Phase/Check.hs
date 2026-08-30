@@ -94,14 +94,6 @@ instantiate (Forall vs t) = do
   let subst = Map.fromList (zip vars ftvs)
   pure $ apply subst t
 
-checkFnDef :: Infer es => FnDef -> Eff es ()
-checkFnDef fn = do
-  act <- infer $ fn^.fnDefFun.fnFunExpr
-
-  case fn^.fnDefSig of
-    Nothing -> pure ()
-    Just x  -> constrain act (x^.fnSigTy)
-
 class Inferable a where
   infer :: Infer es => a -> Eff es Ty
 
