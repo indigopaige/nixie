@@ -76,7 +76,6 @@ pattern TyChr   = TyCon (Ident "chr") []
 pattern TyBin   = TyCon (Ident "bin") []
 pattern a :-> b = TyCon (Ident "->") [a, b]
 
--- Builtin primitive types are assigned from identifiers here, they are not reserved names, but resesrved types
 fromType :: Type -> Ty
 fromType (TypeArr left right) = (fromType left) :-> (fromType right)
 fromType (TypeCon ident args) = TyCon ident (map fromType args)
