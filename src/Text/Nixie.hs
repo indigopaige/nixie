@@ -78,14 +78,12 @@ expression = msum [ lit
     var = ExpressionVar <$> ident
 
 patterns :: Nixie Pattern
-patterns = msum [ try bnd
-               ,  lit
+patterns = msum [ lit
                ,  var
                ,  tup
                ,  lst
                ]
   where
-    bnd = PatternBnd <$> ident <* sym "@" <*> patterns
     lst = PatternLst <$> brackets (sepByComma patterns)
     tup = PatternTup <$> parens (sepByComma patterns)
     lit = PatternLit <$> literal

@@ -55,4 +55,3 @@ builtinTys = Map.fromList
   where
     i3 = TyInt :-> TyInt :-> TyInt
     d3 = TyDec :-> TyDec :-> TyDec
-x

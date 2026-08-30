@@ -32,8 +32,7 @@ data Expression
            )
 
 data Pattern
-  = PatternBnd Ident Pattern
-  | PatternTup [Pattern]
+  = PatternTup [Pattern]
   | PatternLst [Pattern]
   | PatternLit Literal
   | PatternVar Ident
@@ -43,7 +42,6 @@ data Pattern
              )
 
 vars :: Pattern -> [Ident]
-vars (PatternBnd _ p) = vars p
 vars (PatternTup x)   = x >>= vars
 vars (PatternLst x)   = x >>= vars
 vars (PatternLit _)   = []
